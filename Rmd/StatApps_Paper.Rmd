@@ -1,0 +1,52 @@
+---
+title: "Risk of Osteoporosis Based on Dietary Vitamin D and Calcium (NHANES 2017-2018)"
+author: "A. Renganathan & Y.Baldonado"
+date: "2023-04-07"
+output: pdf_document
+---
+
+### Abstract
+
+#Introduction
+
+# Objectives
+
+# Methodology
+
+## Data Source
+
+## R Studio
+
+## Data Management
+
+## Survey Weighting
+
+#Analysis
+
+## Exploratory Analysis
+
+## Descriptive Statistics
+
+## Model Assumptions
+
+## Variable Selection
+
+## Multivariate Logistic Regression
+
+### Initial Model
+
+### Subset Models
+
+### Best Fit Model
+
+#Results
+
+Interpretation of everything here.
+
+#Conclusions
+
+## Limitations
+
+## Future Research
+
+# References
