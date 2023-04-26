@@ -33,8 +33,9 @@ library(tidyverse) #package used for recoding
 library(MASS) #package for stepwise regression
 library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
-library(ggeffects)
-library(pROC)
+library(ggeffects) #for prediction plots
+library(pROC) #package to create ROC curves
+library(usethis) #for github
 
 
 #NOTE ON DPLYR AND CAR
@@ -283,8 +284,7 @@ summ(osteo_model0,
      digits=2,
      vifs = TRUE)
 summary(osteo_model0)
-coef(osteo_model0)
-summary(stepAIC(osteo_model0, direction = "backward"))
+
 ###age and female sig. 
 
 #Multicollinearity check:
@@ -292,7 +292,7 @@ vif(osteo_model0)
 #plots
 plot(ggpredict(osteo_model0), type = "response")
 
-
+###DONT THINK THE FOLLOWING MODELS ARE NEEDED####
 #basic + nutrients: vit D & calcium
 osteo_nutrients<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + calcium_intake + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
 summ(osteo_nutrients,
