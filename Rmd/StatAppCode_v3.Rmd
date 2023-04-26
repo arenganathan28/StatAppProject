@@ -172,6 +172,18 @@ svydsgn <- svydesign(data = os.recoded,
                      weights = ~WTDRD1,
                      nest=TRUE)
 
+#dataset including logs of cont variables
+os.recode <- os.recoded %>% mutate (log_age = log(age), log_calc = log(calcium_intake),
+                                    log_calcsupp = log(calcium_supp), log_vitd = log(vitamin_d),
+                                    log_vitdsupp = log(vitamind_supp))
+os.recode <- os.recode %>% mutate (log_vitd = as.numeric(log_vitd))
+
+#new weighted dataset inlcuding log of cont. variables
+svydsgn2 <- svydesign(data= os.recode,
+                      id =~SDMVPSU,
+                      strata = ~SDMVSTRA,
+                      weights = ~WTDRD1,
+                      nest=TRUE)
 #subset by age
 restr.age <- subset(svydsgn,
                         age>=50,
@@ -261,7 +273,7 @@ svychisq(~nondairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #
 #scatterplot matrix for continuous variables (ommiting discrete variables because they do not tell us anything in this plot):
 pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp), data = svydsgn)
 
-#S-curve?
+#S-curve? : will continue to work on this later
 library(ggplot2)
 ggplot(svydsgn, aes(x = age, y = osteoporosis)) +
   geom_jitter(width = 0.5, height = 0.03, alpha = .2) +
@@ -276,11 +288,10 @@ ggplot(svydsgn, aes(x = age, y = osteoporosis)) +
 
 #reference variable for response
 restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
-#
-as.data.frame(svydsgn)
+
 #full model:
 osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + 
-                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = svydsgn)
+                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age ,family = quasibinomial(link= "logit"), data = os.recoded)
 summ(osteo_model0,
      exp=TRUE,
      confint=TRUE,
@@ -289,20 +300,30 @@ summ(osteo_model0,
      digits=2,
      vifs = TRUE)
 summary(osteo_model0)
+```
 
+```{r assumptions check}
 ###age and female sig. 
-
+#1) large sample size: 3,069 obs
+#2) osteoporosis is binary
+#3) little to no multicollinearity 
 #Multicollinearity check: no assumptions violated
 vif(osteo_model0) 
 
-#outlier check
+#4) obs are independent of each other: confirmed in scatterplot matrix above
+#outlier check: no outliers
 outlierTest(osteo_model0)
 
-#make predictions with the model
-pred0 <- predict(osteo_model0,type="response")
-pred0
-plot
-##NOT working yet, just trying some stuff out###
+#5)log odds have linear relationship (cont variables): all p-values are not sig. meaning there is linear relationship with log odds
+osteo_log<- svyglm(osteoporosis ~ age*log_age + calcium_intake*log_calc + calcium_supp*log_calcsupp + vitamind_supp*log_vitdsupp + vitamin_d*log_vitdsupp, design = svydsgn2, family = quasibinomial(link= "logit"))
+summary(osteo_log)
+                    
+```
+
+```{r plots}
+#reference variable for response
+restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
+
 #ROC curve to test true risk of osteoporosis (testing if model is correct)
 pred1<- prediction(pred0)
 perfROCR <- performance(pred0, "tpr", "fpr")
