@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("jtools")
 #install.packages("dataMaid")
 #install.packages("expss")
+#install.packages("ggsurvey")
 
 #remove CRAN version of RNHANES PACKAGE
 library(utils)
@@ -35,6 +36,7 @@ library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
 library(ggeffects) #for prediction plots
 library(pROC) #package to create ROC curves
+library(ggsurvey) #package to create weighted survey plots
 
 
 
@@ -176,6 +178,10 @@ restr.age <- subset(svydsgn,
 
 osteo.svydsgn <- restr.age
 
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
 #subset by osteoporosis
 svydsgn.osteo <- subset(restr.age,
                       osteoporosis=="Yes",
@@ -274,6 +280,24 @@ ggplot(data.frame(x = x, y = y), aes(x, y)) +
 
 ```
 
+```{r 2way barplots}
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
+#gender
+
+svyplot(osteoporosis~gender, design=osteo.svydsgn, style = "subsample", xlab="Gender", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Gender")
+
+library(ggsurvey)
+ggbarcrosstabs_svy(osteo.svydsgn2, osteoporosis, gender) + labs(title = "Weighted Osteoporosis Diagnosis across Gender") 
+
+
+#fractured wrist
+svyplot(osteoporosis~fractured_wrist, design=osteo.svydsgn, style = "subsample", xlab="Ever fractured wrist?", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Ever fractured wrist")
+
+```
+
 ```{r multiple logreg models}
 library(car)
 library(MASS) #package for stepwise regression
@@ -296,6 +320,7 @@ summary(osteo_model0)
 vif(osteo_model0) 
 #plots
 plot(ggpredict(osteo_model0), type = "response")
+
 
 ###DONT THINK THE FOLLOWING MODELS ARE NEEDED####
 #basic + nutrients: vit D & calcium
@@ -350,4 +375,6 @@ vif(osteo_sig) # all below 5, no issues with multicollinearity
 ####logistic reg plot#####
 # Model: osteo_sig
 plot(ggpredict(osteo_sig), type = "response")
+
+
 ```
