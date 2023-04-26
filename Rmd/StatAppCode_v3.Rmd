@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("jtools")
 #install.packages("dataMaid")
 #install.packages("expss")
+#install.packages("ggsurvey")
 
 #remove CRAN version of RNHANES PACKAGE
 library(utils)
@@ -30,6 +31,7 @@ library(RNHANES) #package used to download NHANES data directly from the website
 library(survey)#package used for complex survey design and analysis, incorporates weights
 library(dplyr) #package used for recoding
 library(tidyverse) #package used for recoding
+<<<<<<< HEAD
 #library(MASS) #package for stepwise regression
 #library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
@@ -38,13 +40,21 @@ library(pROC) #package to create ROC curves
 library(car)
 library(ggsurvey)
 library(ROCR)
+=======
+#library(MASS) #package for stepwise regression -- ADDED LATER BC IT MASKS DPLYR
+library(jtools) #package for summarizing logistic regressions
+library(ggplot2) #package for graphs
+library(ggeffects) #for prediction plots
+library(pROC) #package to create ROC curves
+library(ggsurvey) #package to create weighted survey plots
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 
 
 
 #NOTE ON DPLYR AND CAR
 #recoding is done utilizing dplyr, detach car package to avoid errors
 #if car is not loaded, the following will spit out an error
-#detach(package:car, unload = TRUE)
+#detach(package:MASS, unload = TRUE)
 
 ```
 
@@ -191,6 +201,10 @@ restr.age <- subset(svydsgn,
 
 osteo.svydsgn <- restr.age
 
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
 #subset by osteoporosis
 svydsgn.osteo <- subset(restr.age,
                       osteoporosis=="Yes",
@@ -265,9 +279,10 @@ svychisq(~nondairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #
 
 ```
 
-#removing univariate logreg models bc not needed
+
 
 ``` {r Exploratory Analysis}
+<<<<<<< HEAD
 ###use dataset svydsgn; this is the weighted dataset###
 
 #scatterplot matrix for continuous variables (ommiting discrete variables because they do not tell us anything in this plot):
@@ -280,18 +295,66 @@ ggplot(svydsgn, aes(x = age, y = osteoporosis)) +
   geom_smooth(method = "glm", se = FALSE,
               method.args = list(family = "binomial")) +
   labs(y = expression(hat(P)(osteoporosis)))
+=======
+
+#removing univariate logreg models bc not needed
+
+#For cont variables: Scatterplot
+pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp))
+#for categorical: box plots 
+
+#S-curve?
+invlogit <- function(x) exp(x)/(1 + exp(x))
+invlogit(-8.3 + 0.075 * 0 + 2.8* 0)
+x <- seq(-3, 3, .01)
+y <- invlogit(-8.3 + .075*x)
+ggplot(data.frame(x = x, y = y), aes(x, y)) +
+  geom_line() +
+  ggtitle(expression(paste("y = ", logit^-1,"(-8.3 + 0.075*age)"))) + 
+  ylab("probability of default") +
+  xlab("age")
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 
 
 ```
 
+<<<<<<< HEAD
 ```{r multiple logistic regression models}
 
 #reference variable for response
+=======
+```{r 2way barplots}
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
+#gender
+
+svyplot(osteoporosis~gender, design=osteo.svydsgn, style = "subsample", xlab="Gender", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Gender")
+
+library(ggsurvey)
+ggbarcrosstabs_svy(osteo.svydsgn2, osteoporosis, gender) + labs(title = "Weighted Osteoporosis Diagnosis across Gender") 
+
+
+#fractured wrist
+svyplot(osteoporosis~fractured_wrist, design=osteo.svydsgn, style = "subsample", xlab="Ever fractured wrist?", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Ever fractured wrist")
+
+```
+
+```{r multiple logreg models}
+library(car)
+library(MASS) #package for stepwise regression
+
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
 
 #full model:
+<<<<<<< HEAD
 osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + 
                         calcium_intake + calcium_supp + fractured_wrist, design = restr.age ,family = quasibinomial(link= "logit"), data = os.recoded)
+=======
+osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp +  calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = os.recoded)
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 summ(osteo_model0,
      exp=TRUE,
      confint=TRUE,
@@ -309,6 +372,24 @@ summary(osteo_model0)
 #3) little to no multicollinearity 
 #Multicollinearity check: no assumptions violated
 vif(osteo_model0) 
+<<<<<<< HEAD
+=======
+#plots
+plot(ggpredict(osteo_model0), type = "response")
+
+
+###DONT THINK THE FOLLOWING MODELS ARE NEEDED####
+#basic + nutrients: vit D & calcium
+osteo_nutrients<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + calcium_intake + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
+summ(osteo_nutrients,
+     exp=TRUE,
+     confint=TRUE,
+     model.fit = TRUE,
+     model.info = TRUE,
+     digits=2,
+     vifs = TRUE)
+summary(osteo_nutrients)
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 
 #4) obs are independent of each other: confirmed in scatterplot matrix above
 #outlier check: no outliers
@@ -334,4 +415,13 @@ rocy1 <- roc(svydsgn, osteoporosis, age, plot=TRUE, print.auc= TRUE, legacy.axes
 plot(ggpredict(osteo_model0), type = "response")
 
 
+<<<<<<< HEAD
+=======
+#logreg curve for best model:
+####logistic reg plot#####
+# Model: osteo_sig
+plot(ggpredict(osteo_sig), type = "response")
+
+
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
 ```
