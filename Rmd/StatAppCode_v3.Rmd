@@ -30,18 +30,18 @@ library(RNHANES) #package used to download NHANES data directly from the website
 library(survey)#package used for complex survey design and analysis, incorporates weights
 library(dplyr) #package used for recoding
 library(tidyverse) #package used for recoding
-library(MASS) #package for stepwise regression
+#library(MASS) #package for stepwise regression -- ADDED LATER BC IT MASKS DPLYR
 library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
 library(ggeffects) #for prediction plots
 library(pROC) #package to create ROC curves
-library(usethis) #for github
+
 
 
 #NOTE ON DPLYR AND CAR
 #recoding is done utilizing dplyr, detach car package to avoid errors
 #if car is not loaded, the following will spit out an error
-#detach(package:car, unload = TRUE)
+#detach(package:MASS, unload = TRUE)
 
 ```
 
@@ -250,11 +250,14 @@ svychisq(~nondairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #
 
 ```
 
-#removing univariate logreg models bc not needed
+
 
 ``` {r Exploratory Analysis}
+
+#removing univariate logreg models bc not needed
+
 #For cont variables: Scatterplot
-pairs(cbind(age,calcium_intake, calcium_supp, vitamin_d, vitamind_supp))
+pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp))
 #for categorical: box plots 
 
 #S-curve?
@@ -272,10 +275,12 @@ ggplot(data.frame(x = x, y = y), aes(x, y)) +
 ```
 
 ```{r multiple logreg models}
+library(car)
+library(MASS) #package for stepwise regression
+
 restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
 #full model:
-osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + 
-                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = os.recoded)
+osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp +  calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = os.recoded)
 summ(osteo_model0,
      exp=TRUE,
      confint=TRUE,
