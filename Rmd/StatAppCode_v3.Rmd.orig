@@ -1,0 +1,427 @@
+---
+title: "StatApps Project"
+author: "A. Renganathan & Y.Baldonado"
+date: "2023-04-07"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages("utils")
+#install.packages("survey")
+#install.packages("dplyr")
+#install.packages("tidyverse")
+#install.packages("jtools")
+#install.packages("dataMaid")
+#install.packages("expss")
+#install.packages("ggsurvey")
+
+#remove CRAN version of RNHANES PACKAGE
+library(utils)
+#detach("package:RNHANES", unload = TRUE)
+
+#install devtools for the following
+#install.packages("devtools")
+library(devtools)
+#install RNHANES updated vers from github
+#install_github("silentspringinstitute/RNHANES")
+
+#LOAD LIBRARIES
+library(RNHANES) #package used to download NHANES data directly from the website
+library(survey)#package used for complex survey design and analysis, incorporates weights
+library(dplyr) #package used for recoding
+library(tidyverse) #package used for recoding
+<<<<<<< HEAD
+#library(MASS) #package for stepwise regression
+#library(jtools) #package for summarizing logistic regressions
+library(ggplot2) #package for graphs
+library(ggeffects) #for prediction plots
+library(pROC) #package to create ROC curves
+library(car)
+library(ggsurvey)
+library(ROCR)
+=======
+#library(MASS) #package for stepwise regression -- ADDED LATER BC IT MASKS DPLYR
+library(jtools) #package for summarizing logistic regressions
+library(ggplot2) #package for graphs
+library(ggeffects) #for prediction plots
+library(pROC) #package to create ROC curves
+library(ggsurvey) #package to create weighted survey plots
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+
+
+
+#NOTE ON DPLYR AND CAR
+#recoding is done utilizing dplyr, detach car package to avoid errors
+#if car is not loaded, the following will spit out an error
+#detach(package:MASS, unload = TRUE)
+
+```
+
+#Prologue
+
+##Purpose
+
+##DATA
+
+```{r data management}
+
+#overall dataframe download for 2017-2018
+nhanes<- nhanes_load_data(c("DEMO", "DR1TOT", "DSQTOT", "OSQ", "DBQ"), c("2017-2018","2017-2018","2017-2018","2017-2018","2017-2018"), cache = "./nhanes_data")
+
+
+demo <- nhanes$DEMO %>%
+  dplyr::select(SEQN, #identifier
+         SDDSRVYR,#survey year
+         SDMVPSU, #masked variance pseudo-primary sampling units
+         SDMVSTRA,  #masked variance pseudo-stratum
+         WTMEC2YR,
+         RIDAGEYR, RIAGENDR, RIDRETH3) %>%
+  dplyr::rename(age = RIDAGEYR) %>%
+  dplyr::rename(gender = RIAGENDR) %>%
+  dplyr::rename(race_ethnicity = RIDRETH3)
+
+dietary<- nhanes$DR1TOT %>%
+  dplyr::select (SEQN, DR1TCALC, DR1TVD,
+            WTDRD1) %>% #full sample 2 year mobile examination center(where day 1 diet interview occurred) weight) 
+  dplyr::rename(calcium_intake = DR1TCALC) %>%
+  dplyr::rename(vitamin_d= DR1TVD)
+
+supplements <- nhanes$DSQTOT %>%
+  dplyr::select(SEQN, DSQTVD, DSQTCALC)%>%
+  dplyr::rename(vitamind_supp = DSQTVD) %>%
+  dplyr::rename(calcium_supp= DSQTCALC)
+
+osteo <- nhanes$OSQ %>%
+  dplyr::select(SEQN, OSQ060, OSQ010B) %>%
+  dplyr::rename(osteoporosis = OSQ060) %>%
+  dplyr::rename(fractured_wrist = OSQ010B) 
+
+milk <- nhanes$DBQ %>%
+  dplyr::select(SEQN, DBQ223A, DBQ223B, DBQ223C, DBQ223D, DBQ223E) %>%
+  dplyr::rename(regular_milk = DBQ223A) %>%
+  dplyr::rename(two_percent = DBQ223B) %>%
+  dplyr::rename(one_percent = DBQ223C) %>%
+  dplyr::rename(fatfree_skim = DBQ223D) %>%
+  dplyr::rename(soy_milk = DBQ223E) 
+  
+#remove larger nhanes file
+rm(nhanes)
+
+
+#joining dataframes by main identifier (SEQN) and limiting population to 50+yo due to OSQ data
+osteo_data2 <- demo %>%
+  full_join(dietary, by = "SEQN") %>%
+  full_join(supplements, by = "SEQN") %>%
+  full_join(osteo, by = "SEQN") %>%
+  full_join(milk, by = "SEQN") %>%
+  filter(age>=50)
+
+#creating dairy variable to capture whether dairy milk is consumed = 1
+osteo_data3 <- osteo_data2 %>% 
+  mutate(dairy= ifelse(osteo_data2$regular_milk == 10 | osteo_data2$two_percent == 11 |osteo_data2$one_percent == 12 | osteo_data2$fatfree_skim == 13 | osteo_data2$soy_milk != 14, 1, 0))%>% 
+  mutate(dairy = coalesce(dairy,0))#if dairy is NA then let = 0, otherwise keep value of 1 determined above 
+
+
+#repeat but with nondairy
+osteo_data4 <- osteo_data3 %>%
+  mutate(nondairy = ifelse(osteo_data2$regular_milk != 10 | osteo_data2$two_percent != 11 |osteo_data2$one_percent != 12 | osteo_data2$fatfree_skim != 13 | osteo_data2$soy_milk == 14, 1, 0 ))%>%
+  mutate(nondairy = coalesce(nondairy, 0))
+
+#new dataset with newly created dairy variables (removing each milk option)
+os <- osteo_data4 %>% dplyr::select(age,SDDSRVYR, SDMVPSU,  SDMVSTRA,WTDRD1, WTMEC2YR, gender, race_ethnicity, calcium_intake, vitamin_d, vitamind_supp, calcium_supp,osteoporosis, fractured_wrist, dairy, nondairy)
+
+
+count(os) 
+
+#n=3069
+
+```
+
+```{r recoding data}
+os.recoded<- os %>%
+  mutate(race_ethnicity = recode_factor(.x=race_ethnicity,
+                                  `1`= 'Mexican American',
+                                  `2`='Other Hispanic',
+                                  `3`= 'White',
+                                  `4`='African American',
+                                  `6`='Asian',
+                                  `7` = 'Mixed, other'))%>%
+  mutate(gender= recode_factor(.x=gender,
+                                 `1`='Male',
+                                 `2`='Female')) %>%
+  mutate(osteoporosis= recode_factor(.x=osteoporosis,
+                                 `1`='Yes',
+                                 `2`= 'No',
+                                 `7`= NA_character_,
+                                 `9`= NA_character_))%>%
+  mutate(fractured_wrist= recode_factor(.x=fractured_wrist,
+                                 `1`='Yes',
+                                 `2`= 'No',
+                                 `7`= NA_character_,
+                                 `9`= NA_character_))%>%
+  mutate(WTDRD1 = as.numeric(WTDRD1)) %>%
+  mutate(WTMEC2YR = as.numeric(WTMEC2YR)) %>%
+  mutate(WTDRD1 = coalesce(WTDRD1, WTMEC2YR))
+
+
+rm(osteo_data2)
+rm(osteo_data3)
+rm(osteo_data4)
+summary(os.recoded)
+```
+
+##Survey Design
+
+```{r survey design}
+#sample weight for aggregate data is INT2YR
+#do not na.omit with survey data. you need the whole set for the weights to work
+svydsgn <- svydesign(data = os.recoded,
+                     id=~SDMVPSU,
+                     strata = ~SDMVSTRA,
+                     weights = ~WTDRD1,
+                     nest=TRUE)
+
+#dataset including logs of cont variables
+os.recode <- os.recoded %>% mutate (log_age = log(age), log_calc = log(calcium_intake),
+                                    log_calcsupp = log(calcium_supp), log_vitd = log(vitamin_d),
+                                    log_vitdsupp = log(vitamind_supp))
+os.recode <- os.recode %>% mutate (log_vitd = as.numeric(log_vitd))
+
+#new weighted dataset inlcuding log of cont. variables
+svydsgn2 <- svydesign(data= os.recode,
+                      id =~SDMVPSU,
+                      strata = ~SDMVSTRA,
+                      weights = ~WTDRD1,
+                      nest=TRUE)
+#subset by age
+restr.age <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.pass"))
+
+osteo.svydsgn <- restr.age
+
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
+#subset by osteoporosis
+svydsgn.osteo <- subset(restr.age,
+                      osteoporosis=="Yes",
+                      options(na.action="na.pass"))
+svydsgn.no.osteo<-subset(restr.age,
+                      osteoporosis=="No",
+                   options(na.action="na.pass"))
+
+
+```
+
+```{r descr stats and chi-sq, echo=FALSE}
+#age
+svymean(~age, svydsgn.no.osteo)
+svymean(~age, svydsgn.osteo)
+
+#calculate standard deviation, called 'variance' below 
+#you can only use this on numeric variables, not factors/categorical
+sqrt(svyvar(~age, svydsgn.osteo))
+sqrt(svyvar(~age, svydsgn.no.osteo))
+
+#gender
+svymean(~gender, svydsgn.no.osteo)*100
+svymean(~gender, svydsgn.osteo)*100
+
+#race eth
+svymean(~race_ethnicity, svydsgn.no.osteo)*100
+svymean(~race_ethnicity, svydsgn.osteo)*100
+
+#calcium intake
+svymean(~calcium_intake, svydsgn.osteo, na.rm = TRUE) 
+svymean(~calcium_intake, svydsgn.no.osteo, na.rm = TRUE)
+
+#vitamin d intake
+svymean(~vitamin_d, svydsgn.osteo, na.rm = TRUE)
+svymean(~vitamin_d, svydsgn.no.osteo, na.rm = TRUE) 
+
+#calcium supp
+svymean(~calcium_supp, svydsgn.osteo, na.rm = TRUE)
+svymean(~calcium_supp, svydsgn.no.osteo, na.rm = TRUE)
+
+#vitamin d supp
+svymean(~vitamind_supp, svydsgn.osteo, na.rm = TRUE)
+svymean(~vitamind_supp, svydsgn.no.osteo, na.rm = TRUE)
+
+#fractured wrist
+svymean(~fractured_wrist, svydsgn.osteo)*100
+svymean(~fractured_wrist, svydsgn.no.osteo, na.rm = TRUE)*100
+
+#dairy
+svymean(~dairy, svydsgn.osteo)*100
+svymean(~dairy, svydsgn.no.osteo)*100
+
+#nondairy
+svymean(~nondairy, svydsgn.osteo)*100
+svymean(~nondairy, svydsgn.no.osteo)*100
+
+
+#INDEPENDENCE: chi-sq tests for diff btwn osteoporosis status
+svychisq(~age+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #signf <0.0001
+svychisq(~race_ethnicity+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #not signf
+svychisq(~gender+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) # signf <0.0001
+svyttest(calcium_intake~osteoporosis, design=osteo.svydsgn) #signf <0.05
+svyttest(vitamin_d~osteoporosis, design=osteo.svydsgn) #not signf
+svyttest(vitamind_supp~osteoporosis, design=osteo.svydsgn)#not signf
+svyttest(calcium_supp~osteoporosis, design=osteo.svydsgn) #signf <0.001
+svychisq(~fractured_wrist+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #not signf
+svychisq(~dairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #not signf
+svychisq(~nondairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #not signf
+
+
+
+```
+
+
+
+``` {r Exploratory Analysis}
+<<<<<<< HEAD
+###use dataset svydsgn; this is the weighted dataset###
+
+#scatterplot matrix for continuous variables (ommiting discrete variables because they do not tell us anything in this plot):
+pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp), data = svydsgn)
+
+#S-curve? : will continue to work on this later
+library(ggplot2)
+ggplot(svydsgn, aes(x = age, y = osteoporosis)) +
+  geom_jitter(width = 0.5, height = 0.03, alpha = .2) +
+  geom_smooth(method = "glm", se = FALSE,
+              method.args = list(family = "binomial")) +
+  labs(y = expression(hat(P)(osteoporosis)))
+=======
+
+#removing univariate logreg models bc not needed
+
+#For cont variables: Scatterplot
+pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp))
+#for categorical: box plots 
+
+#S-curve?
+invlogit <- function(x) exp(x)/(1 + exp(x))
+invlogit(-8.3 + 0.075 * 0 + 2.8* 0)
+x <- seq(-3, 3, .01)
+y <- invlogit(-8.3 + .075*x)
+ggplot(data.frame(x = x, y = y), aes(x, y)) +
+  geom_line() +
+  ggtitle(expression(paste("y = ", logit^-1,"(-8.3 + 0.075*age)"))) + 
+  ylab("probability of default") +
+  xlab("age")
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+
+
+```
+
+<<<<<<< HEAD
+```{r multiple logistic regression models}
+
+#reference variable for response
+=======
+```{r 2way barplots}
+osteo.svydsgn2 <- subset(svydsgn,
+                        age>=50,
+                        options(na.action = "na.omit"))
+
+#gender
+
+svyplot(osteoporosis~gender, design=osteo.svydsgn, style = "subsample", xlab="Gender", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Gender")
+
+library(ggsurvey)
+ggbarcrosstabs_svy(osteo.svydsgn2, osteoporosis, gender) + labs(title = "Weighted Osteoporosis Diagnosis across Gender") 
+
+
+#fractured wrist
+svyplot(osteoporosis~fractured_wrist, design=osteo.svydsgn, style = "subsample", xlab="Ever fractured wrist?", ylab= "Osteoporosis Diagnosis", main= "Weighted Osteoporosis Diagnosis across Ever fractured wrist")
+
+```
+
+```{r multiple logreg models}
+library(car)
+library(MASS) #package for stepwise regression
+
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
+
+#full model:
+<<<<<<< HEAD
+osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + 
+                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age ,family = quasibinomial(link= "logit"), data = os.recoded)
+=======
+osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp +  calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = os.recoded)
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+summ(osteo_model0,
+     exp=TRUE,
+     confint=TRUE,
+     model.fit = TRUE,
+     model.info = TRUE,
+     digits=2,
+     vifs = TRUE)
+summary(osteo_model0)
+```
+
+```{r assumptions check}
+###age and female sig. 
+#1) large sample size: 3,069 obs
+#2) osteoporosis is binary
+#3) little to no multicollinearity 
+#Multicollinearity check: no assumptions violated
+vif(osteo_model0) 
+<<<<<<< HEAD
+=======
+#plots
+plot(ggpredict(osteo_model0), type = "response")
+
+
+###DONT THINK THE FOLLOWING MODELS ARE NEEDED####
+#basic + nutrients: vit D & calcium
+osteo_nutrients<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + calcium_intake + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
+summ(osteo_nutrients,
+     exp=TRUE,
+     confint=TRUE,
+     model.fit = TRUE,
+     model.info = TRUE,
+     digits=2,
+     vifs = TRUE)
+summary(osteo_nutrients)
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+
+#4) obs are independent of each other: confirmed in scatterplot matrix above
+#outlier check: no outliers
+outlierTest(osteo_model0)
+
+#5)log odds have linear relationship (cont variables): all p-values are not sig. meaning there is linear relationship with log odds
+osteo_log<- svyglm(osteoporosis ~ age*log_age + calcium_intake*log_calc + calcium_supp*log_calcsupp + vitamind_supp*log_vitdsupp + vitamin_d*log_vitdsupp, design = svydsgn2, family = quasibinomial(link= "logit"))
+summary(osteo_log)
+                    
+```
+
+```{r plots}
+#reference variable for response
+restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
+
+#ROC curve to test true risk of osteoporosis (testing if model is correct)
+pred1<- prediction(pred0)
+perfROCR <- performance(pred0, "tpr", "fpr")
+plot(perfROCR, colorize = TRUE)
+rocy1 <- roc(svydsgn, osteoporosis, age, plot=TRUE, print.auc= TRUE, legacy.axes = TRUE)
+
+#predicted probability plots
+plot(ggpredict(osteo_model0), type = "response")
+
+
+<<<<<<< HEAD
+=======
+#logreg curve for best model:
+####logistic reg plot#####
+# Model: osteo_sig
+plot(ggpredict(osteo_sig), type = "response")
+
+
+>>>>>>> 8579c524b74067fb2d5b779c86dbb1ab5634dc08
+```
