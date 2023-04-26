@@ -124,7 +124,7 @@ count(os)
 ```{r recoding data}
 os.recoded<- os %>%
   mutate(race_ethnicity = recode_factor(.x=race_ethnicity,
-                                  `1`= 'Mexican American',
+                                  `1`= 1,
                                   `2`='Other Hispanic',
                                   `3`= 'White',
                                   `4`='African American',
