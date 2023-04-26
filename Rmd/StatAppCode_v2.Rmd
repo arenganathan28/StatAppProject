@@ -32,6 +32,9 @@ library(dplyr) #package used for recoding
 library(tidyverse) #package used for recoding
 library(MASS) #package for stepwise regression
 library(jtools) #package for summarizing logistic regressions
+library(ggplot2) #package for graphs
+library(ggeffects)
+library(pROC)
 
 
 #NOTE ON DPLYR AND CAR

@@ -30,12 +30,15 @@ library(RNHANES) #package used to download NHANES data directly from the website
 library(survey)#package used for complex survey design and analysis, incorporates weights
 library(dplyr) #package used for recoding
 library(tidyverse) #package used for recoding
-library(MASS) #package for stepwise regression
-library(jtools) #package for summarizing logistic regressions
+#library(MASS) #package for stepwise regression
+#library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
 library(ggeffects) #for prediction plots
 library(pROC) #package to create ROC curves
-library(usethis) #for github
+library(car)
+library(ggsurvey)
+library(ROCR)
+
 
 
 #NOTE ON DPLYR AND CAR
@@ -58,39 +61,39 @@ nhanes<- nhanes_load_data(c("DEMO", "DR1TOT", "DSQTOT", "OSQ", "DBQ"), c("2017-2
 
 
 demo <- nhanes$DEMO %>%
-  select(SEQN, #identifier
+  dplyr::select(SEQN, #identifier
          SDDSRVYR,#survey year
          SDMVPSU, #masked variance pseudo-primary sampling units
          SDMVSTRA,  #masked variance pseudo-stratum
          WTMEC2YR,
          RIDAGEYR, RIAGENDR, RIDRETH3) %>%
-  rename(age = RIDAGEYR) %>%
-  rename(gender = RIAGENDR) %>%
-  rename(race_ethnicity = RIDRETH3)
+  dplyr::rename(age = RIDAGEYR) %>%
+  dplyr::rename(gender = RIAGENDR) %>%
+  dplyr::rename(race_ethnicity = RIDRETH3)
 
 dietary<- nhanes$DR1TOT %>%
-  select (SEQN, DR1TCALC, DR1TVD,
+  dplyr::select (SEQN, DR1TCALC, DR1TVD,
             WTDRD1) %>% #full sample 2 year mobile examination center(where day 1 diet interview occurred) weight) 
-  rename(calcium_intake = DR1TCALC) %>%
-  rename(vitamin_d= DR1TVD)
+  dplyr::rename(calcium_intake = DR1TCALC) %>%
+  dplyr::rename(vitamin_d= DR1TVD)
 
 supplements <- nhanes$DSQTOT %>%
-  select(SEQN, DSQTVD, DSQTCALC)%>%
-  rename(vitamind_supp = DSQTVD) %>%
-  rename(calcium_supp= DSQTCALC)
+  dplyr::select(SEQN, DSQTVD, DSQTCALC)%>%
+  dplyr::rename(vitamind_supp = DSQTVD) %>%
+  dplyr::rename(calcium_supp= DSQTCALC)
 
 osteo <- nhanes$OSQ %>%
-  select(SEQN, OSQ060, OSQ010B) %>%
-  rename(osteoporosis = OSQ060) %>%
-  rename(fractured_wrist = OSQ010B) 
+  dplyr::select(SEQN, OSQ060, OSQ010B) %>%
+  dplyr::rename(osteoporosis = OSQ060) %>%
+  dplyr::rename(fractured_wrist = OSQ010B) 
 
 milk <- nhanes$DBQ %>%
-  select(SEQN, DBQ223A, DBQ223B, DBQ223C, DBQ223D, DBQ223E) %>%
-  rename(regular_milk = DBQ223A) %>%
-  rename(two_percent = DBQ223B) %>%
-  rename(one_percent = DBQ223C) %>%
-  rename(fatfree_skim = DBQ223D) %>%
-  rename(soy_milk = DBQ223E) 
+  dplyr::select(SEQN, DBQ223A, DBQ223B, DBQ223C, DBQ223D, DBQ223E) %>%
+  dplyr::rename(regular_milk = DBQ223A) %>%
+  dplyr::rename(two_percent = DBQ223B) %>%
+  dplyr::rename(one_percent = DBQ223C) %>%
+  dplyr::rename(fatfree_skim = DBQ223D) %>%
+  dplyr::rename(soy_milk = DBQ223E) 
   
 #remove larger nhanes file
 rm(nhanes)
@@ -116,7 +119,7 @@ osteo_data4 <- osteo_data3 %>%
   mutate(nondairy = coalesce(nondairy, 0))
 
 #new dataset with newly created dairy variables (removing each milk option)
-os <- osteo_data4 %>% select(age,SDDSRVYR, SDMVPSU,  SDMVSTRA,WTDRD1, WTMEC2YR, gender, race_ethnicity, calcium_intake, vitamin_d, vitamind_supp, calcium_supp,osteoporosis, fractured_wrist, dairy, nondairy)
+os <- osteo_data4 %>% dplyr::select(age,SDDSRVYR, SDMVPSU,  SDMVSTRA,WTDRD1, WTMEC2YR, gender, race_ethnicity, calcium_intake, vitamin_d, vitamind_supp, calcium_supp,osteoporosis, fractured_wrist, dairy, nondairy)
 
 
 count(os) 
@@ -253,29 +256,31 @@ svychisq(~nondairy+osteoporosis ,design = osteo.svydsgn, statistic=c("Chisq")) #
 #removing univariate logreg models bc not needed
 
 ``` {r Exploratory Analysis}
-#For cont variables: Scatterplot
-pairs(cbind(age,calcium_intake, calcium_supp, vitamin_d, vitamind_supp))
-#for categorical: box plots 
+###use dataset svydsgn; this is the weighted dataset###
+
+#scatterplot matrix for continuous variables (ommiting discrete variables because they do not tell us anything in this plot):
+pairs(cbind(age, calcium_intake, calcium_supp, vitamin_d, vitamind_supp), data = svydsgn)
 
 #S-curve?
-invlogit <- function(x) exp(x)/(1 + exp(x))
-invlogit(-8.3 + 0.075 * 0 + 2.8* 0)
-x <- seq(-3, 3, .01)
-y <- invlogit(-8.3 + .075*x)
-ggplot(data.frame(x = x, y = y), aes(x, y)) +
-  geom_line() +
-  ggtitle(expression(paste("y = ", logit^-1,"(-8.3 + 0.075*age)"))) + 
-  ylab("probability of default") +
-  xlab("age")
+library(ggplot2)
+ggplot(svydsgn, aes(x = age, y = osteoporosis)) +
+  geom_jitter(width = 0.5, height = 0.03, alpha = .2) +
+  geom_smooth(method = "glm", se = FALSE,
+              method.args = list(family = "binomial")) +
+  labs(y = expression(hat(P)(osteoporosis)))
 
 
 ```
 
-```{r multiple logreg models}
+```{r multiple logistic regression models}
+
+#reference variable for response
 restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
+#
+as.data.frame(svydsgn)
 #full model:
 osteo_model0<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + 
-                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = os.recoded)
+                        calcium_intake + calcium_supp + fractured_wrist, design = restr.age, family = quasibinomial(link= "logit"), data = svydsgn)
 summ(osteo_model0,
      exp=TRUE,
      confint=TRUE,
@@ -287,62 +292,25 @@ summary(osteo_model0)
 
 ###age and female sig. 
 
-#Multicollinearity check:
+#Multicollinearity check: no assumptions violated
 vif(osteo_model0) 
-#plots
+
+#outlier check
+outlierTest(osteo_model0)
+
+#make predictions with the model
+pred0 <- predict(osteo_model0,type="response")
+pred0
+plot
+##NOT working yet, just trying some stuff out###
+#ROC curve to test true risk of osteoporosis (testing if model is correct)
+pred1<- prediction(pred0)
+perfROCR <- performance(pred0, "tpr", "fpr")
+plot(perfROCR, colorize = TRUE)
+rocy1 <- roc(svydsgn, osteoporosis, age, plot=TRUE, print.auc= TRUE, legacy.axes = TRUE)
+
+#predicted probability plots
 plot(ggpredict(osteo_model0), type = "response")
 
-###DONT THINK THE FOLLOWING MODELS ARE NEEDED####
-#basic + nutrients: vit D & calcium
-osteo_nutrients<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp + calcium_intake + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
-summ(osteo_nutrients,
-     exp=TRUE,
-     confint=TRUE,
-     model.fit = TRUE,
-     model.info = TRUE,
-     digits=2,
-     vifs = TRUE)
-summary(osteo_nutrients)
 
-
-#basic + calcium:
-osteo_calc<- svyglm(osteoporosis ~ age + gender + calcium_intake + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
-summ(osteo_calc,
-     exp=TRUE,
-     confint=TRUE,
-     model.fit = TRUE,
-     model.info = TRUE,
-     digits=2,
-     vifs = TRUE)
-summary(osteo_calc)
-
-#basic + vitamin D:
-osteo_vitd<- svyglm(osteoporosis ~ age + gender + vitamin_d + vitamind_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
-summ(osteo_vitd,
-     exp=TRUE,
-     confint=TRUE,
-     model.fit = TRUE,
-     model.info = TRUE,
-     digits=2,
-     vifs = TRUE)
-summary(osteo_vitd)
-restr.age$variables$osteoporosis<- relevel(restr.age$variables$osteoporosis, ref = "No")
-#model with only sig predictors:
-osteo_sig <- svyglm(osteoporosis ~ age + gender + calcium_supp, design = restr.age,  family = binomial(link= "logit"), data = os.recoded)
-summ(osteo_sig,
-     exp=TRUE,
-     confint=TRUE,
-     model.fit = TRUE,
-     model.info = TRUE,
-     digits=2,
-     vifs = TRUE)
-summary(osteo_sig)
-
-#multicollinearity check
-vif(osteo_sig) # all below 5, no issues with multicollinearity
-
-#logreg curve for best model:
-####logistic reg plot#####
-# Model: osteo_sig
-plot(ggpredict(osteo_sig), type = "response")
 ```
