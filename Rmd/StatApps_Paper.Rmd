@@ -1,21 +1,19 @@
 ---
 title: "Risk of Osteoporosis Based on Dietary Vitamin D and Calcium (NHANES 2017-2018)"
-author: "A. Renganathan & Y.Baldonado"
-date: "04/07/2023"
+author: "Anjana Renganathan & Yazmin Baldonado"
+date: "04/28/2023"
 output: pdf_document
 ---
 
-### Abstract
-
 # Introduction
 
-Multivariate logistic regression models are a common statistical methodology used when trying to model a response that is binary, or dichotomous. It aims to derive the model with the best fit and the highest efficiency that explains the relationship between the predictor and response variables.
+Multiple logistic regression models are a common statistical methodology used when trying to model a response that is binary, or dichotomous. It aims to derive the model with the best fit and the highest efficiency that explains the relationship between the predictor and response variables.
 
 Unlike typical regression models, a logistic regression transforms the model into a probability model for the outcome which can be interpreted as the probability that the response will occur based on the predictors in the model.
 
 Logistic regression is ideal for modeling our question because it allows us to test both continuous and categorical predictors against a binary response.
 
-For this project, we use a multivariate logistic regression model to assess the risk of osteoporosis diagnosis based on a variety of predictors, including dietary and supplementary calcium and Vitamin D, as well as fractured wrists. 
+For this project, we use a multiple logistic regression model to assess the risk of osteoporosis diagnosis based on a variety of predictors, including dietary and supplementary calcium and Vitamin D, as well as fractured wrists. 
 
 Osteoporosis is a chronic metabolic bone disease that is characterized by decreased bone mineral density and bone mass, resulting in weakened bone structure and strength. It presents in patients as wrist, hip and spine fractures, which are often caused from gentle stressors like falling from standing, lifting heavy objects or even coughing (REFERENCE).
 
@@ -48,51 +46,60 @@ Using the R package RNHANES, we extracted the pertinent information for our anal
 - Dietary Calcium, Dietary Vitamin D, Calcium Vitamin Supplementation, Vitamin D Supplementation from the Dietary files
 - Fractured Wrist from the Questionnaire files.
 
+(Survey weighting was done with the “survey” package.
+Version control was completed through Git and Github.)
 
-After data management completed with t, we were left with 3,069 observations. The continuous predictors were Age, Calcium Intake, Vitamin D intake, Calcium Vitamin Supplementation, Vitamin D Supplementation and the categorical predictors were Gender, Race/Ethnicity, Dairy milk consumption, Nondairy milk consumption, Fractured Wrist, and Osteoporosis.
+
+After data management completed with t, we were left with 3,069 observations. The continuous predictors were Age, Calcium Intake, Vitamin D intake, Calcium Vitamin Supplementation, Vitamin D Supplementation and the categorical predictors were Gender, Fractured Wrist, and Osteoporosis.
 
 
 ## Data Management
 
+## Limitations
+One of the main limitations is we only were only able to use observations with Age greater than or equal 50 years. This is because the only ones participants asked if they had Osteoporosis were people 50 years and older. 
+
 ## Survey Weighting
 
-# Analysis
-
-## Exploratory Analysis
-
-We first ran a simple logistic regression to test each variable against our response Osteoporosis to see which variables were individually significant. We found that Age, Gender (Female), Calcium Intake, and Calcium Supplementation were significant.
-
+# Survey Analysis
 
 ## Descriptive Statistics
 
-## Model Assumptions
-fg
+## Exploratory Analysis
 
+In order to visualize the data, we first created a scatterplot matrix of all the continuous variables. The discrete variables were not in the matrix due to their binary values and the lack of information they would contribute to the overall matrix. Looking at the plot, it is evident there is no obvious linear relationship between the continuous predictors which tells us we will not be dealing with issues of correlation. For the categorical variables, we created bar graphs for each variable to take a cursory glance at the data. The graph looking at osteoporosis across gender shows there are more females than males with osteoporosis, however there are more without for both genders. For the Fractured Wrist plot, we also see that there are more people who have not fractured their wrist than have. 
 
-### Independent Observations
-
-### Multicollinearity
-
-### Linearity of Continuous Variables Across Strata
-
-## Variable Selection
-
-## Multivariate Logistic Regression
 
 ### Initial Model
+** include picture of full model here**
+From our model, the variables Age and Gender, specifically female, were found to be highly statistically significant with p-values well below 0.05. We see that the rest of the variables are not statistically significant. The coefficient estimates tell us the log odds of the variables relationship with our response. In this case, for every one unit increase the log odds of having osteoporosis increases by 0.075 for age, and the log odds of osteoporosis for females increases by 2.8. 
 
-### Subset Models
+## Model Assumptions
 
-### Best Fit Model
+In order to continue with our logistic regression analysis we need to ensure our model meets all the necessary assumptions.
+
+The first assumption for any logistic regression model is having the response be binary, in our case this is Osteoporosis and it is binary with values of 0 (no risk) and 1 (there is a risk). 
+The variables also need to be independent of each other. Earlier, the scatterplot matrix confirmed that the continuous relationships were independent, however this assumption also refers to the inclusion of matched data (or matched pairs) and data with repeated measures. For our dataset we are not including either of the two and can conclude this assumption has also been met. 
+
+** include table of VIF values here**
+With any model, there needs to be little to no multicollineary (or correlation) between our predictors as this can skew the results. We tested the correlation using the Variance Inflation Factor (VIF) test. As shown above, all our values were below the optimal cutoff of 5, which indicates we do not have multicollinearity. The sample size of our data set is 3,069 observations and is large enough for our analysis. 
+
+** include table of p-values for log interactions here**
+Lastly, the independent continuous variables need to be linearly related to the logs odds. In other words, there needs to be a linear relationship between our predictors and their logs. To check this, we tested the interaction between each predictors and its log in our model. Each interaction resulted in a non-significant p-value, which tells us there is a linear relationship and our assumption has been validated. After checking all of our model assumptions we felt it was safe enough to continue analyzing this logistic regression model. 
+
 
 # Results
+** include PredProb graphs here** 
+Using the results of our model, we plotted the predicted probabilities of Osteoporosis for each of our significant predictors. For Age, we see that as age increases the risk of a positive osteoporosis diagnosis increases up to 10%. For gender, females are much more likely to receive a positive diagnosis than males, specifically 2.8 times more likely and the predicted probability for females to receive this diagnosis is 35% and 3% for males. 
 
-Interpretation of everything here.
+# Model Test
+** include ROC curve here*
+To test how well our model performs at correctly assessing the predictors effect on our outcome (Osteoporosis), we used a Receiver operating characteristic Curve that allows us to illustrate the diagnostic ability of our model. The curve plots the false positive rate versus the true positive rate of our model. To quantify our assessment, we look we at the Area Under the Curve (AUC). The goal is to have a high AUC as possible, as this will indicate a perfectly accurate test, or the better our model is at predicting  0 classes as 0 and 1 classes as 1 (true positive rate). For our plot, the AUC is 0.809, or 0.81, since our value is above 0.80, this indicates our test is very good. 
 
 # Conclusions
-
-## Limitations
+In conclusion, we found that Age and Gender have the most risk associated with Osteoporosis. Thes are pre specified risk factors, so it is logical that they were highly significant. Unfortuneatly, dietary factors did not play as big a role as we predicted in our analysis. 
 
 ## Future Research
+For future research, we could incorporate both Day 1 and Day 2 dietary and supplementary values for calcium and vitamin D. We did not intially incorporate both day values for calcium and vitamin d as this would have complicated our survey design objects, analysis and models due to the addition of extra weights. 
+Another model that can be tested is the risk using lifestyle factors such as alcohol consumption, smoking status, activity level, weight, and bone density.  
 
 # References
