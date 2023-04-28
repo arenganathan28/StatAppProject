@@ -171,9 +171,7 @@ restr.age <- subset(svydsgn,
 
 osteo.svydsgn <- restr.age
 
-osteo.svydsgn2 <- subset(svydsgn,
-                        age>=50,
-                        options(na.action = "na.omit"))
+
 
 #subset by osteoporosis
 svydsgn.osteo <- subset(restr.age,
