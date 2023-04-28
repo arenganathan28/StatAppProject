@@ -66,6 +66,8 @@ We first ran a simple logistic regression to test each variable against our resp
 ## Descriptive Statistics
 
 ## Model Assumptions
+fg
+
 
 ### Independent Observations
 

@@ -7,7 +7,11 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# INSTALL PACKAGES ###############################
+
 #install.packages("utils")
+#install.packages("devtools")
 #install.packages("survey")
 #install.packages("dplyr")
 #install.packages("tidyverse")
@@ -16,15 +20,23 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("expss")
 #install.packages("ggsurvey")
 
-#remove CRAN version of RNHANES PACKAGE
-library(utils)
-#detach("package:RNHANES", unload = TRUE)
+##Installing Updated RNHANES package
 
-#install devtools for the following
-#install.packages("devtools")
-library(devtools)
+#remove CRAN version of RNHANES PACKAGE (outdated, does not include 2017-2018 cycle)
+      library(utils)
+      #detach("package:RNHANES", unload = TRUE)
+      
+#install devtools in order to install the updated RNHANES package from github
+      #install.packages("devtools")
+      library(devtools)
+
 #install RNHANES updated vers from github
-#install_github("silentspringinstitute/RNHANES")
+#you can only run this once, so it's commented out
+      #install_github("silentspringinstitute/RNHANES")
+
+# LOAD LIBRARIES ###############################
+
+
 
 #LOAD LIBRARIES
 library(RNHANES) #package used to download NHANES data directly from the website
@@ -35,7 +47,7 @@ library(tidyverse) #package used for recoding
 library(jtools) #package for summarizing logistic regressions
 library(ggplot2) #package for graphs
 library(ggeffects) #for prediction plots
-library(pROC) #package to create ROC curves
+library(WeightedROC) #package to create ROC curves
 library(ggsurvey) #package to create weighted survey plots
 
 
@@ -43,6 +55,7 @@ library(ggsurvey) #package to create weighted survey plots
 #NOTE ON DPLYR AND CAR
 #recoding is done utilizing dplyr, detach car package to avoid errors
 #if car is not loaded, the following will spit out an error
+#if car is loaded, it will not
 #detach(package:MASS, unload = TRUE)
 
 ```
@@ -56,86 +69,66 @@ library(ggsurvey) #package to create weighted survey plots
 ```{r data management}
 
 #overall dataframe download for 2017-2018
-nhanes<- nhanes_load_data(c("DEMO", "DR1TOT", "DSQTOT", "OSQ", "DBQ"), c("2017-2018","2017-2018","2017-2018","2017-2018","2017-2018"), cache = "./nhanes_data")
+nhanes<- nhanes_load_data(c("DEMO", "DR1TOT", "DSQTOT", "OSQ"), c("2017-2018","2017-2018","2017-2018","2017-2018"), cache=TRUE)
 
 
 demo <- nhanes$DEMO %>%
   select(SEQN, #identifier
          SDDSRVYR,#survey year
          SDMVPSU, #masked variance pseudo-primary sampling units
-         SDMVSTRA,  #masked variance pseudo-stratum
-         WTMEC2YR,
-         RIDAGEYR, RIAGENDR, RIDRETH3) %>%
+         SDMVSTRA,#masked variance pseudo-stratum
+         WTMEC2YR, #examination weights
+         RIDAGEYR, #age
+         RIAGENDR #gender
+         ) %>%
   rename(age = RIDAGEYR) %>%
-  rename(gender = RIAGENDR) %>%
-  rename(race_ethnicity = RIDRETH3)
+  rename(gender = RIAGENDR)
 
 dietary<- nhanes$DR1TOT %>%
-  select (SEQN, DR1TCALC, DR1TVD,
-            WTDRD1) %>% #full sample 2 year mobile examination center(where day 1 diet interview occurred) weight) 
+  select (SEQN, #identifier
+          DR1TCALC, #day 1 dietary calcium
+          DR1TVD, #day 1 dietary vitamin d
+          WTDRD1 #full sample 2 year mobile examination center(where day 1 diet interview occurred) weight) 
+          ) %>% 
   rename(calcium_intake = DR1TCALC) %>%
   rename(vitamin_d= DR1TVD)
 
 supplements <- nhanes$DSQTOT %>%
-  select(SEQN, DSQTVD, DSQTCALC)%>%
+  select(SEQN, #identifier
+         DSQTVD, #supplemental vitamin d
+         DSQTCALC #supplemental calcium
+         )%>%
   rename(vitamind_supp = DSQTVD) %>%
   rename(calcium_supp= DSQTCALC)
 
 osteo <- nhanes$OSQ %>%
-  select(SEQN, OSQ060, OSQ010B) %>%
+  select(SEQN, #identifier
+         OSQ060, #reported diagnosis osteoporosis
+         OSQ010B #reported fractured wrist
+         ) %>%
   rename(osteoporosis = OSQ060) %>%
   rename(fractured_wrist = OSQ010B) 
 
-milk <- nhanes$DBQ %>%
-  select(SEQN, DBQ223A, DBQ223B, DBQ223C, DBQ223D, DBQ223E) %>%
-  rename(regular_milk = DBQ223A) %>%
-  rename(two_percent = DBQ223B) %>%
-  rename(one_percent = DBQ223C) %>%
-  rename(fatfree_skim = DBQ223D) %>%
-  rename(soy_milk = DBQ223E) 
   
 #remove larger nhanes file
 rm(nhanes)
 
-
 #joining dataframes by main identifier (SEQN) and limiting population to 50+yo due to OSQ data
-osteo_data2 <- demo %>%
+os <- demo %>%
   full_join(dietary, by = "SEQN") %>%
   full_join(supplements, by = "SEQN") %>%
   full_join(osteo, by = "SEQN") %>%
-  full_join(milk, by = "SEQN") %>%
   filter(age>=50)
 
-#creating dairy variable to capture whether dairy milk is consumed = 1
-osteo_data3 <- osteo_data2 %>% 
-  mutate(dairy= ifelse(osteo_data2$regular_milk == 10 | osteo_data2$two_percent == 11 |osteo_data2$one_percent == 12 | osteo_data2$fatfree_skim == 13 | osteo_data2$soy_milk != 14, 1, 0))%>% 
-  mutate(dairy = coalesce(dairy,0))#if dairy is NA then let = 0, otherwise keep value of 1 determined above 
-
-
-#repeat but with nondairy
-osteo_data4 <- osteo_data3 %>%
-  mutate(nondairy = ifelse(osteo_data2$regular_milk != 10 | osteo_data2$two_percent != 11 |osteo_data2$one_percent != 12 | osteo_data2$fatfree_skim != 13 | osteo_data2$soy_milk == 14, 1, 0 ))%>%
-  mutate(nondairy = coalesce(nondairy, 0))
-
-#new dataset with newly created dairy variables (removing each milk option)
-os <- osteo_data4 %>% select(age,SDDSRVYR, SDMVPSU,  SDMVSTRA,WTDRD1, WTMEC2YR, gender, race_ethnicity, calcium_intake, vitamin_d, vitamind_supp, calcium_supp,osteoporosis, fractured_wrist, dairy, nondairy)
 
 
 count(os) 
-
 #n=3069
 
 ```
 
 ```{r recoding data}
 os.recoded<- os %>%
-  mutate(race_ethnicity = recode_factor(.x=race_ethnicity,
-                                  `1`= 'Mexican American',
-                                  `2`='Other Hispanic',
-                                  `3`= 'White',
-                                  `4`='African American',
-                                  `6`='Asian',
-                                  `7` = 'Mixed, other'))%>%
   mutate(gender= recode_factor(.x=gender,
                                  `1`='Male',
                                  `2`='Female')) %>%
